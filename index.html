@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registo de Tensões</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="Favicon.png">
+    <!-- Importar Chart.js para o gráfico -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --border-color: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            background-color: #fff;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+        }
+
+        .row .form-group {
+            flex: 1;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:active {
+            background-color: #1d4ed8;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: 250px;
+        }
+
+        .history-list {
+            max-height: 220px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+
+        .badge-normal { background-color: #dcfce7; color: #166534; }
+        .badge-alto { background-color: #fee2e2; color: #991b1b; }
+
+        .btn-danger {
+            background-color: #ef4444;
+            margin-top: 15px;
+            padding: 10px;
+            font-size: 0.85rem;
+        }
+        .btn-danger:active {
+            background-color: #dc2626;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Registo de Tensões</h1>
+
+    <!-- Formulário de Registo -->
+    <div class="card">
+        <form id="tensionForm">
+            <div class="row">
+                <div class="form-group">
+                    <label for="data">Data</label>
+                    <input type="date" id="data" required>
+                </div>
+                <div class="form-group">
+                    <label for="momento">Momento</label>
+                    <select id="momento" required>
+                        <option value="Manhã">Manhã</option>
+                        <option value="Meio do dia">Meio do dia</option>
+                        <option value="Fim do dia">Fim do dia</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label for="maxima">Máxima (Sistólica)</label>
+                    <input type="number" id="maxima" value="120" required>
+                </div>
+                <div class="form-group">
+                    <label for="minima">Mínima (Diastólica)</label>
+                    <input type="number" id="minima" value="80" required>
+                </div>
+            </div>
+
+            <button type="submit">Guardar Registo</button>
+        </form>
+    </div>
+
+    <!-- Gráfico -->
+    <div class="card">
+        <h3 style="margin-top: 0; font-size: 1.1rem; text-align: center;">Evolução Gráfica</h3>
+        <div class="chart-container">
+            <canvas id="tensionChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Histórico Recente e Limpeza -->
+    <div class="card">
+        <h3 style="margin-top: 0; font-size: 1.1rem;">Últimos Registos</h3>
+        <div id="historyList" class="history-list">
+            <!-- Preenchido via JavaScript -->
+        </div>
+        <button class="btn-danger" onclick="limparDados()">Apagar Todos os Dados</button>
+    </div>
+</div>
+
+<script>
+    // Definir a data atual por defeito no input
+    document.getElementById('data').valueAsDate = new Date();
+
+    // Obter registos do localStorage ou iniciar array vazio
+    let registos = JSON.parse(localStorage.getItem('tensoes_registos')) || [];
+
+    const form = document.getElementById('tensionForm');
+    const historyList = document.getElementById('historyList');
+    let myChart = null;
+
+    // Inicializar o Gráfico
+    function initChart() {
+        const ctx = document.getElementById('tensionChart').getContext('2d');
+        
+        // Ordenar cronologicamente para o gráfico
+        const dadosOrdenados = [...registos].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        const labels = dadosOrdenados.map(r => `${r.data.split('-').slice(1).join('/')} (${r.momento.charAt(0)})`);
+        const maxData = dadosOrdenados.map(r => r.maxima);
+        const minData = dadosOrdenados.map(r => r.minima);
+
+        if (myChart) {
+            myChart.destroy();
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Máxima',
+                        data: maxData,
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        tension: 0.2
+                    },
+                    {
+                        label: 'Mínima',
+                        data: minData,
+                        borderColor: '#3b82f6',
+                        backgroundColor: '#3b82f6',
+                        tension: 0.2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+    }
+
+    // Atualizar a lista visual de histórico
+    function updateHistory() {
+        historyList.innerHTML = '';
+        if (registos.length === 0) {
+            historyList.innerHTML = '<p style="color: #64748b; text-align: center;">Sem registos guardados.</p>';
+            return;
+        }
+
+        // Mostrar do mais recente para o mais antigo
+        const dadosInversos = [...registos].reverse();
+        dadosInversos.forEach((reg, index) => {
+            const realIndex = registos.length - 1 - index;
+            const div = document.createElement('div');
+            div.className = 'history-item';
+            
+            const isAlto = reg.maxima >= 135 || reg.minima >= 85;
+            const badgeClass = isAlto ? 'badge-alto' : 'badge-normal';
+
+            div.innerHTML = `
+                <div>
+                    <strong>${reg.data}</strong><br>
+                    <span style="color: #64748b; font-size: 0.75rem;">${reg.momento}</span>
+                </div>
+                <div>
+                    <span class="badge ${badgeClass}">${reg.maxima} / ${reg.minima}</span>
+                </div>
+                <span onclick="apagarRegisto(${realIndex})" style="color: #ef4444; cursor: pointer; font-weight: bold; font-size: 1.2rem; padding: 0 5px;">&times;</span>
+            `;
+            historyList.appendChild(div);
+        });
+    }
+
+    // Submeter o formulário
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const novoRegisto = {
+            data: document.getElementById('data').value,
+            momento: document.getElementById('momento').value,
+            maxima: Number(document.getElementById('maxima').value),
+            minima: Number(document.getElementById('minima').value),
+            timestamp: new Date().getTime()
+        };
+
+        registos.push(novoRegisto);
+        localStorage.setItem('tensoes_registos', JSON.stringify(registos));
+
+        initChart();
+        updateHistory();
+    });
+
+    // Apagar um registo individual
+    window.apagarRegisto = function(index) {
+        if (confirm('Pretende apagar este registo?')) {
+            registos.splice(index, 1);
+            localStorage.setItem('tensoes_registos', JSON.stringify(registos));
+            initChart();
+            updateHistory();
+        }
+    }
+
+    // Apagar todos os dados
+    window.limparDados = function() {
+        if (confirm('Tem a certeza que pretende apagar todos os registos guardados?')) {
+            registos = [];
+            localStorage.removeItem('tensoes_registos');
+            initChart();
+            updateHistory();
+        }
+    }
+
+    // Executar ao carregar a página
+    initChart();
+    updateHistory();
+</script>
+
+</body>
+</html>
